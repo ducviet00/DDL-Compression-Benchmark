@@ -10,6 +10,8 @@ from synchronize import post_synchronize
 from synchronize import _allreduce_grad_async, _sparse_allreduce_async, _custom_allreduce_async
 from compressor import compressors
 from timer import Timer
+from mpi4py import MPI
+comm = MPI.COMM_WORLD
 init()
 
 
@@ -17,7 +19,7 @@ if __name__ == '__main__':
     
     parser = argparse.ArgumentParser(description="Benchmark Communicate across gpus")
     parser.add_argument('--method', type=str, default='none')
-    parser.add_argument('--nloop', type=int, default=100)
+    parser.add_argument('--nloop', type=int, default=1000)
     parser.add_argument('--size', type=int, default='2500000')
     parser.add_argument('--density', type=float, default='0.01')
     parser.add_argument('--nwpernode', type=int, default=4)
@@ -27,25 +29,25 @@ if __name__ == '__main__':
     rank = rank()
     torch.cuda.set_device(rank%args.nwpernode)
     sync_time = []
+    grad_tensor = torch.rand(args.size, dtype=torch.float32)
     for iter in range(args.nloop):
-        with timer("one iteration time", epoch=iter):
-            grad_tensor = torch.rand(args.size)
-            # print(f"[rank: {rank()}][iter: {iter}] Grad tensor before: {torch.sum(grad_tensor)}")
-            with timer("compress and sync", epoch=iter):
-                if args.method == 'structured' or args.method == 'randomblock':
-                    handle, ctx, stime = _custom_allreduce_async(grad_tensor, args.density, compressors[args.method], iter=iter, timer=timer)
-                    new_tensor, etime  = post_synchronize(grad_tensor, handle, ctx, args.density, method=args.method, timer=timer)
+        comm.Barrier()
+        # print(f"[rank: {rank()}][iter: {iter}] Grad tensor before: {torch.sum(grad_tensor)}")
+        with timer("compress and sync", epoch=iter):
+            if args.method == 'structured' or args.method == 'randomblock':
+                handle, ctx, stime = _custom_allreduce_async(grad_tensor, args.density, compressors[args.method], iter=iter, timer=timer)
+                new_tensor, etime  = post_synchronize(grad_tensor, handle, ctx, args.density, method=args.method, timer=timer)
 
-                elif args.method == 'topk' or args.method == 'randomk':
-                    handle, ctx, stime = _sparse_allreduce_async(grad_tensor, args.density, compressors[args.method], iter=iter, timer=timer)
-                    new_tensor, etime  = post_synchronize(grad_tensor, handle, ctx, args.density, method=args.method, timer=timer)
+            elif args.method == 'topk' or args.method == 'randomk':
+                handle, ctx, stime = _sparse_allreduce_async(grad_tensor, args.density, compressors[args.method], iter=iter, timer=timer)
+                new_tensor, etime  = post_synchronize(grad_tensor, handle, ctx, args.density, method=args.method, timer=timer)
 
-                elif args.method == 'none' or args.method is None:
-                    handle, ctx, stime = _allreduce_grad_async(grad_tensor, timer=timer)
-                    new_tensor, etime = post_synchronize(grad_tensor, handle, ctx, args.density, method=args.method, timer=timer)
-                sync_time.append(etime - stime)
-            # print(f"[rank: {rank()}][iter: {iter}] Grad tensor after: {torch.sum(grad_tensor)}")
-            # print(f"[rank: {rank()}][iter: {iter}] New tensor after: {torch.sum(new_tensor)}")
+            elif args.method == 'none' or args.method is None:
+                handle, ctx, stime = _allreduce_grad_async(grad_tensor, timer=timer)
+                new_tensor, etime = post_synchronize(grad_tensor, handle, ctx, args.density, method=args.method, timer=timer)
+            sync_time.append(etime - stime)
+        # print(f"[rank: {rank()}][iter: {iter}] Grad tensor after: {torch.sum(grad_tensor)}")
+        # print(f"[rank: {rank()}][iter: {iter}] New tensor after: {torch.sum(new_tensor)}")
 
     if rank == 0:
         mean_sync_time = sum(sync_time) / len(sync_time)

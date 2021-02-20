@@ -1,9 +1,8 @@
 [Rank 0]:
 --- Timer summary -----------------------------------------------
   Event                          |  Count | Average time |  Frac.
-- compress and sync              |     99 |     0.05329s |  80.6%
-- one iteration time             |     99 |     0.06626s | 100.0%
-- topk compressing time          |     99 |     0.04023s |  60.9%
-- topk decompressing time        |     99 |     0.00831s |  12.7%
+- compress and sync              |    999 |     0.03885s |  98.5%
+- topk compressing time          |    999 |     0.02878s |  73.0%
+- topk decompressing time        |    999 |     0.00620s |  15.7%
 -----------------------------------------------------------------
-- sync time | count:     99 | time:     0.00521s
+- sync time | count:    999 | time:     0.00382s
