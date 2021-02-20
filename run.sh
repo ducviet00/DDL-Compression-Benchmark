@@ -10,7 +10,7 @@
 
 DENSITY=0.01
 METHOD="randomk"
-
+TENSOR_SIZE=2500000
 NUM_NODES=${NHOSTS}
 NUM_GPUS_PER_NODE=4
 NUM_PROCS=$(expr ${NUM_NODES} \* ${NUM_GPUS_PER_NODE})
@@ -22,4 +22,4 @@ cat $SGE_JOB_HOSTLIST > ${LOG_DIR}/$JOB_ID.$JOB_NAME.nodes.list
 
 
 MPIOPTS="-np ${NUM_PROCS} --hostfile $SGE_JOB_HOSTLIST --oversubscribe -map-by ppr:${NUM_GPUS_PER_NODE}:node -mca pml ob1 -mca btl ^openib -mca btl_tcp_if_include bond0" #-x NCCL_DEBUG=INFO"
-mpirun ${MPIOPTS} python3 benchmark_comm.py --method $METHOD --density $DENSITY
+mpirun ${MPIOPTS} python3 benchmark_comm.py --method $METHOD --density $DENSITY --size $TENSOR_SIZE

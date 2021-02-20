@@ -15,22 +15,24 @@ def _allreduce_grad_async(p):
     handle = allreduce_async_(tensor_compressed, average=True)
     return handle, ctx
 
-def _custom_allreduce_async(p, density, compressor, iter):
+def _custom_allreduce_async(p, density, compressor, iter, timer=None):
     tensor = p.data.view(-1)
-    tensor_compressed, ctx, selected_values = compressor.compress(tensor, ratio=density, iteration=iter)
+    with timer(compressor.name + " compressing", epoch=iter):
+        tensor_compressed, ctx, selected_values = compressor.compress(tensor, ratio=density, iteration=iter)
     handle = allreduce_async_(selected_values, average=True)
     return handle, ctx
 
-def _sparse_allreduce_async(p, density, compressor):
+def _sparse_allreduce_async(p, density, compressor, iter, timer=None):
     tensor = p.data.view(-1)
-    tensor_compressed, ctx, selected_values = compressor.compress(tensor, ratio=density)
+    with timer(compressor.name + " compressing", epoch=iter):
+        tensor_compressed, ctx, selected_values = compressor.compress(tensor, ratio=density)
     indexes = ctx
     handle = allgather_async(selected_values)
     handle_idx = allgather_async(indexes.int())
     return (handle, handle_idx), ctx 
 
 
-def post_synchronize(tensor, handle, ctx, density, method="none"):
+def post_synchronize(tensor, handle, ctx, density, method="none", timer=None):
     num_of_workers = size()
     """
     Structured and random block commnunicate implemnetion
