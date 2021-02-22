@@ -46,7 +46,8 @@ class RedSyncCompressor():
                 tmp_ratio = l + (r-l)/2
                 thres = mean_val + tmp_ratio * (max_val - mean_val)
                 one_indexes = abs_tensor > thres
-                indexes = one_indexes.nonzero().data.squeeze().view(-1)
+                # indexes = one_indexes.nonzero().data.squeeze().view(-1)
+                indexes = torch.nonzero(one_indexes, as_tuple=False).data.squeeze().view(-1)
                 nnz = indexes.numel()
                 if nnz > k and 2*k > nnz:
                     break

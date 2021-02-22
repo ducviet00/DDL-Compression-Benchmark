@@ -19,7 +19,7 @@ if __name__ == '__main__':
     
     parser = argparse.ArgumentParser(description="Benchmark Communicate across gpus")
     parser.add_argument('--method', type=str, default='none')
-    parser.add_argument('--nloop', type=int, default=1000)
+    parser.add_argument('--nloop', type=int, default=100)
     parser.add_argument('--size', type=int, default='2500000')
     parser.add_argument('--density', type=float, default='0.01')
     parser.add_argument('--nwpernode', type=int, default=4)
@@ -29,30 +29,32 @@ if __name__ == '__main__':
     rank = rank()
     torch.cuda.set_device(rank%args.nwpernode)
     sync_time = []
-    grad_tensor = torch.rand(args.size, dtype=torch.float32)
+    grad_tensor = torch.rand(args.size, dtype=torch.float32).cuda()
     for iter in range(args.nloop):
-        comm.Barrier()
-        # print(f"[rank: {rank()}][iter: {iter}] Grad tensor before: {torch.sum(grad_tensor)}")
+        # comm.Barrier()
+        print(f"[rank: {rank}][iter: {iter}] Grad tensor before: {torch.sum(grad_tensor)}")
         with timer("compress and sync", epoch=iter):
             if args.method == 'structured' or args.method == 'randomblock':
                 handle, ctx, stime = _custom_allreduce_async(grad_tensor, args.density, compressors[args.method], iter=iter, timer=timer)
                 new_tensor, etime  = post_synchronize(grad_tensor, handle, ctx, args.density, method=args.method, timer=timer)
 
-            elif args.method == 'topk' or args.method == 'randomk':
+            elif args.method == 'topk' or args.method == 'randomk' \
+                or args.method == 'redsync' or args.method == 'gaussian':
                 handle, ctx, stime = _sparse_allreduce_async(grad_tensor, args.density, compressors[args.method], iter=iter, timer=timer)
                 new_tensor, etime  = post_synchronize(grad_tensor, handle, ctx, args.density, method=args.method, timer=timer)
 
             elif args.method == 'none' or args.method is None:
                 handle, ctx, stime = _allreduce_grad_async(grad_tensor, timer=timer)
                 new_tensor, etime = post_synchronize(grad_tensor, handle, ctx, args.density, method=args.method, timer=timer)
-            sync_time.append(etime - stime)
-        # print(f"[rank: {rank()}][iter: {iter}] Grad tensor after: {torch.sum(grad_tensor)}")
-        # print(f"[rank: {rank()}][iter: {iter}] New tensor after: {torch.sum(new_tensor)}")
+            if iter > 0:
+                sync_time.append(etime - stime)
+        print(f"[rank: {rank}][iter: {iter}] Grad tensor after: {torch.sum(grad_tensor)}")
+        print(f"[rank: {rank}][iter: {iter}] New tensor after: {torch.sum(new_tensor)}")
 
     if rank == 0:
         mean_sync_time = sum(sync_time) / len(sync_time)
         print("\n" + timer.summary())
-        print(f"- sync time | count: {len(sync_time) -1:6d} | time: {mean_sync_time :11.5f}s")
+        print(f"- sync time | count: {len(sync_time):6d} | time: {mean_sync_time :11.5f}s")
 
         with open(f"logs/SUMMARY_{args.method}.txt", "w") as f:
             f.write(f"[Rank {rank}]:\n")

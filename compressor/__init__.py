@@ -4,13 +4,14 @@ from .structured import StructuredCompressor
 from .randomblock import RandomBlockCompressor
 from .redsync import RedSyncCompressor
 from .none import NoneCompressor
+from .gaussiank import GaussianCompressor        
 
 compressors = {
         'structured': StructuredCompressor,
         'randomblock': RandomBlockCompressor,
         'topk': TopKCompressor,
         # 'topk2': TopKCompressor2,
-        # 'gaussian': GaussianCompressor,
+        'gaussian': GaussianCompressor,
         # 'gaussian2': GaussianCompressor2,
         'randomk': RandomKCompressor,
         # 'randomkec': RandomKECCompressor,

@@ -1,0 +1,8 @@
+[Rank 0]:
+--- Timer summary -----------------------------------------------
+  Event                          |  Count | Average time |  Frac.
+- compress and sync              |      9 |     0.03798s |  95.1%
+- redsync compressing time       |      9 |     0.01896s |  48.8%
+- redsync decompressing time     |      9 |     0.00741s |  20.3%
+-----------------------------------------------------------------
+- sync time | count:      9 | time:     0.01623s

@@ -8,6 +8,8 @@ from horovod.torch.mpi_ops import init, broadcast
 import time
 import torch
 import numpy as np
+from mpi4py import MPI
+comm = MPI.COMM_WORLD
 
 def _allreduce_grad_async(p):
     tensor = p.data.view(-1)
@@ -55,7 +57,8 @@ def post_synchronize(tensor, handle, ctx, density, method="none", timer=None):
     """
     Top-K and random-K communicate implemention
     """
-    if method == "topk" or method == 'randomk':
+    if method == "topk" or method == 'randomk' \
+        or method == 'redsync' or method == 'gaussian':
         assert type(handle) is tuple
         handle, handle_idx = handle[0], handle[1]
 

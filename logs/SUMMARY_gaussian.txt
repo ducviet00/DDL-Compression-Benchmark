@@ -1,0 +1,8 @@
+[Rank 0]:
+--- Timer summary -----------------------------------------------
+  Event                          |  Count | Average time |  Frac.
+- compress and sync              |     99 |     0.01393s |  98.2%
+- gaussian compressing time      |     99 |     0.00084s |   6.0%
+- gaussian decompressing time    |     99 |     0.00058s |   4.1%
+-----------------------------------------------------------------
+- sync time | count:     98 | time:     0.01239s
