@@ -36,6 +36,87 @@ def _sparse_allreduce_async(p, density, compressor, iter, timer=None):
     handle_idx = allgather_async(indexes.int())
     return (handle, handle_idx), ctx, stime
 
+def torch_intersect(t1, t2):
+    t1= set(t1.unique())
+    t2= set(t2.unique())    
+    return t1.intersection(t2)
+
+def gtopk_sparse_allreduce(comm, values, indexes, density, dtype=np.float32):
+    """
+    0: 0(0) <- 1(1), 2(2) <- 3(3), 4(4) <- 5(5), 6(6) <- 7(7)
+    1: 0(0) <- 2(1), 4(2) <- 6(3)
+    2: 0(0) <- 4(1)
+    0 -> 1
+    0 -> 2, 1 -> 3
+    0 -> 4, 1 -> 5, 2 -> 6, 3 -> 7
+    """
+    num_workers = size()
+    rank = rank()
+
+    tensor = values
+    k = indexes.size[0]
+    original_indexes = indexes
+
+    send_values = torch.cat((indexes, values))
+    recv_values = np.zeros_like(send_values)
+
+    num_round = int(np.log2(num_workers))
+    local_rank = rank
+    exist_workers = num_workers
+    step = 1
+    participate_ranks = range(0, num_workers, step)
+    for i in range(num_round):
+        if rank in participate_ranks:
+            local_rank = participate_ranks.index(rank)
+            if local_rank % 2 == 0:
+                source = participate_ranks[local_rank+1]
+                comm.Recv([recv_values, MPI.FLOAT], source=source)
+                tmp_indexes = recv_values[0:k]
+                tmp_values = recv_values[k:2*k]
+
+                cv, c1, c2 = np.intersect1d(indexes, tmp_indexes, assume_unique=False, return_indices=True)
+                values[c1] += tmp_values[c2]
+                tmp_values[c2] = 0.0
+
+                tmp_c = np.concatenate((values, tmp_values))
+                tmp_topki, tmp_topkv = torch.topk(torch.abs(tensor.data), k=k)
+                first_array_indexes = tmp_topki[tmp_topki < k]
+                second_array_indexes = tmp_topki[tmp_topki >= k]-k
+                indexes = np.concatenate((indexes[first_array_indexes], tmp_indexes[second_array_indexes]))
+                values = np.concatenate((values[first_array_indexes], tmp_values[second_array_indexes]))
+
+                send_values = np.concatenate((indexes, values))
+                send_values[0:k] = indexes.astype(np.uint32)
+                send_values[k:2*k] = values.astype(np.float32)
+            else:
+                target = participate_ranks[local_rank-1]
+                logger.debug('[round:%d], %d(%d)->%d(%d)', i, rank, local_rank, target, local_rank-1)
+                comm.Send([send_values, MPI.FLOAT], dest=target)
+        exist_workers /= 2
+        step *= 2
+        participate_ranks = range(0, num_workers, step)
+        comm.Barrier()
+
+    if rank == 0:
+        send_values = np.concatenate((indexes, values))
+        indexes = indexes.astype(np.uint32)
+        values = values.astype(np.float32)
+        send_values[0:k] = indexes
+        send_values[k:2*k] = values
+    else:
+        send_values = recv_values[0:2*k]
+    comm.Bcast(send_values, root=0)
+    tensor.fill(0.)
+    if rank != 0:
+        tmp_indexes = send_values[0:k].astype(np.uint32)
+        tmp_values = send_values[k:2*k].astype(np.float32)
+        values = tmp_values
+        indexes = tmp_indexes
+
+    cv, c1, c2 = np.intersect1d(original_indexes, indexes, assume_unique=False, return_indices=True)
+    included_indexes = c1
+    return values, indexes, included_indexes # final selected values and indexes
+
 
 def post_synchronize(tensor, handle, ctx, density, method="none", timer=None):
     num_of_workers = size()

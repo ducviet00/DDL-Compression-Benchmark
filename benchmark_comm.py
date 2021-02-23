@@ -32,7 +32,7 @@ if __name__ == '__main__':
     grad_tensor = torch.rand(args.size, dtype=torch.float32).cuda()
     for iter in range(args.nloop):
         # comm.Barrier()
-        print(f"[rank: {rank}][iter: {iter}] Grad tensor before: {torch.sum(grad_tensor)}")
+        # print(f"[rank: {rank}][iter: {iter}] Grad tensor before: {torch.sum(grad_tensor)}")
         with timer("compress and sync", epoch=iter):
             if args.method == 'structured' or args.method == 'randomblock':
                 handle, ctx, stime = _custom_allreduce_async(grad_tensor, args.density, compressors[args.method], iter=iter, timer=timer)
@@ -48,8 +48,8 @@ if __name__ == '__main__':
                 new_tensor, etime = post_synchronize(grad_tensor, handle, ctx, args.density, method=args.method, timer=timer)
             if iter > 0:
                 sync_time.append(etime - stime)
-        print(f"[rank: {rank}][iter: {iter}] Grad tensor after: {torch.sum(grad_tensor)}")
-        print(f"[rank: {rank}][iter: {iter}] New tensor after: {torch.sum(new_tensor)}")
+        # print(f"[rank: {rank}][iter: {iter}] Grad tensor after: {torch.sum(grad_tensor)}")
+        # print(f"[rank: {rank}][iter: {iter}] New tensor after: {torch.sum(new_tensor)}")
 
     if rank == 0:
         mean_sync_time = sum(sync_time) / len(sync_time)
