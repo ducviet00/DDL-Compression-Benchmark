@@ -41,7 +41,7 @@ def torch_intersect(t1, t2):
     t2= set(t2.unique())    
     return t1.intersection(t2)
 
-def gtopk_sparse_allreduce(comm, values, indexes, density, dtype=np.float32):
+def gtopk_sparse_allreduce(comm, sparse_tensor, storage=None, indexes=None, dtype=np.float32):
     """
     0: 0(0) <- 1(1), 2(2) <- 3(3), 4(4) <- 5(5), 6(6) <- 7(7)
     1: 0(0) <- 2(1), 4(2) <- 6(3)
@@ -50,15 +50,33 @@ def gtopk_sparse_allreduce(comm, values, indexes, density, dtype=np.float32):
     0 -> 2, 1 -> 3
     0 -> 4, 1 -> 5, 2 -> 6, 3 -> 7
     """
-    num_workers = size()
-    rank = rank()
+    num_workers = comm.size
+    rank = comm.rank
 
-    tensor = values
-    k = indexes.size[0]
+    tensor = sparse_tensor
+    if indexes is None:
+        k = int(tensor.size * 0.001)
+        indexes, values = utils.topk(tensor, k)
+    else:
+        if not (type(indexes) is np.ndarray):
+            indexes = indexes.cpu().numpy()
+        k = len(indexes)
+        values = tensor 
     original_indexes = indexes
-
-    send_values = torch.cat((indexes, values))
-    recv_values = np.zeros_like(send_values)
+    send_values = np.concatenate((indexes, values))
+    send_values[0:k] = indexes.astype(np.uint32)
+    send_values[k:2*k] = values.astype(np.float32)
+    if storage is not None and 'result_v2' in storage:
+        recv_values = storage['result_v2']
+        if recv_values.size < k*2:
+            recv_values = np.zeros_like(send_values)
+            if storage:
+                storage['result_v2'] = recv_values
+        recv_values = recv_values[0:k*2]
+    else:
+        recv_values = np.zeros_like(send_values)
+        if storage:
+            storage['result_v2'] = recv_values
 
     num_round = int(np.log2(num_workers))
     local_rank = rank
@@ -71,7 +89,7 @@ def gtopk_sparse_allreduce(comm, values, indexes, density, dtype=np.float32):
             if local_rank % 2 == 0:
                 source = participate_ranks[local_rank+1]
                 comm.Recv([recv_values, MPI.FLOAT], source=source)
-                tmp_indexes = recv_values[0:k]
+                tmp_indexes = recv_values[0:k].astype(np.int)
                 tmp_values = recv_values[k:2*k]
 
                 cv, c1, c2 = np.intersect1d(indexes, tmp_indexes, assume_unique=False, return_indices=True)
@@ -79,7 +97,7 @@ def gtopk_sparse_allreduce(comm, values, indexes, density, dtype=np.float32):
                 tmp_values[c2] = 0.0
 
                 tmp_c = np.concatenate((values, tmp_values))
-                tmp_topki, tmp_topkv = torch.topk(torch.abs(tensor.data), k=k)
+                tmp_topki, tmp_topkv = utils.topk(tmp_c, k)
                 first_array_indexes = tmp_topki[tmp_topki < k]
                 second_array_indexes = tmp_topki[tmp_topki >= k]-k
                 indexes = np.concatenate((indexes[first_array_indexes], tmp_indexes[second_array_indexes]))
