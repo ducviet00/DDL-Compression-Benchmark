@@ -18,6 +18,15 @@ def _allreduce_grad_async(p):
     handle = allreduce_async_(tensor_compressed, average=True)
     return handle, ctx, stime
 
+def _layer_maxblock_allreduce_grad_async(p, name, density, compressor, iter, timer=None):
+    tensor = p.data.view(-1)
+    with timer(compressor.name + " compressing time", epoch=iter):
+        tensor_compressed, ctx, selected_values = compressor.compress(tensor, name, ratio=density)
+    # print(type(selected_values), torch.sum(selected_values))
+    stime = time.time()
+    handle = allreduce_async_(selected_values, average=True)
+    return handle, ctx, stime
+
 def _custom_allreduce_async(p, density, compressor, iter, timer=None):
     tensor = p.data.view(-1)
     with timer(compressor.name + " compressing time", epoch=iter):
@@ -153,6 +162,19 @@ def post_synchronize(tensor, handle, ctx, density, method="none", timer=None):
             new_grad[start_idx:end_idx] = output
 
         return new_grad, etime
+
+    """
+    Submax layer
+    """
+    if method == "submax_by_layer":
+        output = synchronize(handle)
+        etime = time.time()
+        with timer(method + " decompressing time"):
+            new_grad = tensor.data.view(-1)
+            new_grad.fill_(0.0)
+            new_grad[ctx] = output
+        return new_grad, etime
+
     """
     Top-K and random-K communicate implemention
     """

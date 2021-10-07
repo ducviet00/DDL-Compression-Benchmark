@@ -1,0 +1,8 @@
+[Rank 0]:
+--- Timer summary -----------------------------------------------
+  Event                          |  Count | Average time |  Frac.
+- compress and sync              |     99 |     0.05666s | 100.0%
+- submax_by_layer compressing time |     99 |     0.02409s |  42.6%
+- submax_by_layer decompressing time |     99 |     0.00030s |   0.5%
+-----------------------------------------------------------------
+- sync time | count:     98 | time:     0.03188s

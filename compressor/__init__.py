@@ -4,9 +4,11 @@ from .structured import StructuredCompressor
 from .randomblock import RandomBlockCompressor
 from .redsync import RedSyncCompressor
 from .none import NoneCompressor
-from .gaussiank import GaussianCompressor        
+from .gaussiank import GaussianCompressor       
+from .submaxlayer import SubMaxbyLayerCompressor
 
 compressors = {
+        'submax_by_layer': SubMaxbyLayerCompressor,
         'structured': StructuredCompressor,
         'randomblock': RandomBlockCompressor,
         'topk': TopKCompressor,

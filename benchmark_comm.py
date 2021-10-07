@@ -8,6 +8,7 @@ import torch
 import numpy
 from synchronize import post_synchronize
 from synchronize import _allreduce_grad_async, _sparse_allreduce_async, _custom_allreduce_async
+from synchronize import _layer_maxblock_allreduce_grad_async
 from compressor import compressors
 from timer import Timer
 from mpi4py import MPI
@@ -45,6 +46,11 @@ if __name__ == '__main__':
 
             elif args.method == 'none' or args.method is None:
                 handle, ctx, stime = _allreduce_grad_async(grad_tensor, timer=timer)
+                new_tensor, etime = post_synchronize(grad_tensor, handle, ctx, args.density, method=args.method, timer=timer)
+            
+            elif args.method == 'submax_by_layer':
+                compressors[args.method].select_sub_max(grad_tensor, name="test", ratio=args.density, iter=iter)
+                handle, ctx, stime = _layer_maxblock_allreduce_grad_async(grad_tensor, "test", args.density, compressors[args.method], iter, timer)
                 new_tensor, etime = post_synchronize(grad_tensor, handle, ctx, args.density, method=args.method, timer=timer)
             if iter > 0:
                 sync_time.append(etime - stime)
